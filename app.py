@@ -22,7 +22,7 @@ if uploaded_file is not None:
         
         df = None
         # Quét tìm dòng tiêu đề trong 6 dòng đầu tiên của file
-        for skip in range(6):
+        for skip in range(20):
             try:
                 if is_csv:
                     temp_df = pd.read_csv(io.BytesIO(file_bytes), skiprows=skip)
@@ -150,3 +150,4 @@ if uploaded_file is not None:
             
     except Exception as e:
         st.error(f"Có lỗi xảy ra khi xử lý file: {e}")
+
