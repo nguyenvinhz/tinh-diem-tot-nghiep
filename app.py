@@ -22,7 +22,7 @@ if uploaded_file is not None:
         
         df = None
         # 1. Quét tìm dòng tiêu đề chuẩn
-        for skip in range(51):
+        for skip in range(6):
             try:
                 if is_csv:
                     temp_df = pd.read_csv(io.BytesIO(file_bytes), skiprows=skip)
@@ -49,7 +49,18 @@ if uploaded_file is not None:
             st.error("Không tìm thấy cột chứa Tên học sinh (Họ và tên, Họ tên, Tên...). Vui lòng kiểm tra lại file của bạn.")
             st.stop()
 
-        df = df.dropna(subset=['Họ và tên']).reset_index(drop=True)
+        # --- HIỂN THỊ DỮ LIỆU GỐC ---
+        with st.expander("👀 Xem dữ liệu gốc (Bấm để mở rộng/thu gọn)"):
+            st.dataframe(df)
+
+        # --- XÓA CÁC DÒNG RỖNG VÀ DÒNG THỐNG KÊ (Tổng cộng, Tỉ lệ...) ---
+        df = df.dropna(subset=['Họ và tên'])
+        
+        # Lọc bỏ các dòng mà tên bắt đầu bằng "Tổng", "Tỉ lệ", "Trung bình"...
+        invalid_prefixes = ('tổng', 'tỉ lệ', 'ty le', 'trung bình', 'ghi chú', 'tb')
+        df = df[~df['Họ và tên'].astype(str).str.lower().str.startswith(invalid_prefixes)]
+        
+        df = df.reset_index(drop=True)
         df['STT'] = np.arange(1, len(df) + 1)
 
         display_cols = ['STT', 'Họ và tên']
@@ -65,7 +76,7 @@ if uploaded_file is not None:
         has_3_years = bool(col_10 and col_11 and col_12)
 
         if has_3_years:
-            # Nếu có 3 năm, ưu tiên tính lại bằng công thức chuẩn 2025 để đảm bảo độ chính xác
+            # Ưu tiên tính lại bằng công thức chuẩn 2025 để đảm bảo độ chính xác
             df[col_10] = pd.to_numeric(df[col_10], errors='coerce').fillna(0)
             df[col_11] = pd.to_numeric(df[col_11], errors='coerce').fillna(0)
             df[col_12] = pd.to_numeric(df[col_12], errors='coerce').fillna(0)
@@ -77,7 +88,6 @@ if uploaded_file is not None:
                 col_10: '{:.2f}', col_11: '{:.2f}', col_12: '{:.2f}', 'Điểm TB 3 năm': '{:.2f}'
             })
         elif col_dtb:
-            # Nếu không đủ 3 năm nhưng có cột điểm trung bình chung
             df['Điểm TB 3 năm'] = pd.to_numeric(df[col_dtb], errors='coerce').fillna(0)
             df['Điểm TB 3 năm'] = round(df['Điểm TB 3 năm'], 2)
             
@@ -164,4 +174,3 @@ if uploaded_file is not None:
             
     except Exception as e:
         st.error(f"Có lỗi xảy ra khi xử lý file: {e}")
-
