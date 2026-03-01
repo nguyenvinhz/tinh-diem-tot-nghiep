@@ -18,22 +18,42 @@ uploaded_file = st.file_uploader("Tải lên file học bạ (CSV, XLSX, hoặc 
 if uploaded_file is not None:
     try:
         file_bytes = uploaded_file.getvalue()
+        is_csv = uploaded_file.name.lower().endswith('.csv')
         
-        if uploaded_file.name.endswith('.csv'):
-            df = pd.read_csv(io.BytesIO(file_bytes))
-            if 'Họ và tên' not in df.columns:
-                df = pd.read_csv(io.BytesIO(file_bytes), skiprows=1)
-        else:
-            df = pd.read_excel(io.BytesIO(file_bytes))
-            if 'Họ và tên' not in df.columns:
-                df = pd.read_excel(io.BytesIO(file_bytes), skiprows=1)
+        df = None
+        # Quét tìm dòng tiêu đề trong 6 dòng đầu tiên của file
+        for skip in range(6):
+            try:
+                if is_csv:
+                    temp_df = pd.read_csv(io.BytesIO(file_bytes), skiprows=skip)
+                else:
+                    temp_df = pd.read_excel(io.BytesIO(file_bytes), skiprows=skip)
+                
+                # Cắt bỏ mọi khoảng trắng thừa (Space) ở các cột
+                temp_df.columns = temp_df.columns.astype(str).str.strip()
+                
+                # Tìm cột Tên linh hoạt (chấp nhận "Họ và tên", "Họ tên", "Tên", "HỌ TÊN"...)
+                name_col = None
+                for col in temp_df.columns:
+                    col_lower = str(col).lower()
+                    if col_lower in ['họ và tên', 'họ tên', 'tên', 'ho va ten', 'ho ten', 'name']:
+                        name_col = col
+                        break
+                
+                # Nếu quét thấy cột Tên thì chuẩn hóa tên cột, lưu DataFrame và thoát vòng lặp
+                if name_col:
+                    temp_df.rename(columns={name_col: 'Họ và tên'}, inplace=True)
+                    df = temp_df
+                    break
+            except Exception:
+                continue
 
-        df.columns = df.columns.str.strip()
-
-        if 'Họ và tên' not in df.columns:
-            st.error("Không tìm thấy cột 'Họ và tên' trong file. Vui lòng kiểm tra lại cấu trúc file của bạn.")
+        # Nếu sau khi quét vẫn không thấy
+        if df is None:
+            st.error("Không tìm thấy cột chứa Tên học sinh (Họ và tên, Họ tên, Tên...). Vui lòng kiểm tra lại file của bạn.")
             st.stop()
 
+        # Lọc bỏ các dòng bị rỗng ở cột Tên
         df = df.dropna(subset=['Họ và tên']).reset_index(drop=True)
 
         required_cols = ['Điểm lớp 10', 'Điểm lớp 11', 'Điểm lớp 12']
