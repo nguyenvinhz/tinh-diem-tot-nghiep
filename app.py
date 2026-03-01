@@ -13,7 +13,6 @@ st.markdown("""
 - Điều kiện đậu: Điểm Xét Tốt Nghiệp $\ge$ 5.0 và không có bài thi nào bị điểm liệt ($\le$ 1.0).
 """)
 
-# Upload file
 uploaded_file = st.file_uploader("Tải lên file học bạ (CSV, XLSX, hoặc XLS)", type=['csv', 'xlsx', 'xls'])
 
 if uploaded_file is not None:
@@ -42,16 +41,37 @@ if uploaded_file is not None:
             st.error(f"File cần chứa các cột: {', '.join(required_cols)}. Các cột hiện có: {list(df.columns)}")
         else:
             df['STT'] = np.arange(1, len(df) + 1)
-
             df['Điểm TB 3 năm'] = round((df['Điểm lớp 10'] + df['Điểm lớp 11'] * 2 + df['Điểm lớp 12'] * 3) / 6, 2)
             
-            st.sidebar.header("Cài đặt Thêm")
-            diem_uu_tien = st.sidebar.number_input("Điểm Ưu Tiên (Cộng vào kết quả cuối)", min_value=0.0, max_value=0.5, value=0.0, step=0.25)
-            diem_khuyen_khich = st.sidebar.number_input("Tổng Điểm Khuyến Khích (Cho tất cả HS)", min_value=0.0, max_value=4.0, value=0.0, step=0.5)
-
-            df['Tổng 4 môn'] = (10 - 2*diem_uu_tien - df['Điểm TB 3 năm']) * 4 - diem_khuyen_khich
-            df['Điểm tối thiểu/môn'] = df['Tổng 4 môn'] / 4
+            # --- Cột cơ bản luôn hiển thị ---
+            display_cols = ['STT', 'Họ và tên', 'Điểm lớp 10', 'Điểm lớp 11', 'Điểm lớp 12', 'Điểm TB 3 năm']
+            format_dict = {
+                'Điểm lớp 10': '{:.2f}',
+                'Điểm lớp 11': '{:.2f}',
+                'Điểm lớp 12': '{:.2f}',
+                'Điểm TB 3 năm': '{:.2f}'
+            }
             
+            # --- XỬ LÝ ĐỘNG CỘT ƯU TIÊN VÀ KHUYẾN KHÍCH ---
+            ut_cols = [col for col in df.columns if 'ưu tiên' in str(col).lower()]
+            if ut_cols:
+                df['Điểm ƯT'] = pd.to_numeric(df[ut_cols[0]], errors='coerce').fillna(0)
+                display_cols.append('Điểm ƯT')
+                format_dict['Điểm ƯT'] = '{:.2f}'
+            else:
+                df['Điểm ƯT'] = 0.0
+                
+            kk_cols = [col for col in df.columns if 'khuyến khích' in str(col).lower()]
+            if kk_cols:
+                df['Điểm KK'] = pd.to_numeric(df[kk_cols[0]], errors='coerce').fillna(0)
+                display_cols.append('Điểm KK')
+                format_dict['Điểm KK'] = '{:.2f}'
+            else:
+                df['Điểm KK'] = 0.0
+                
+            # --- TÍNH TOÁN ---
+            df['Tổng 4 môn'] = (10 - 2 * df['Điểm ƯT'] - df['Điểm TB 3 năm']) * 4 - df['Điểm KK']
+            df['Điểm tối thiểu/môn'] = df['Tổng 4 môn'] / 4
             df['Điểm tối thiểu/môn'] = df['Điểm tối thiểu/môn'].apply(lambda x: max(x, 1.25))
             
             def assess_risk(score):
@@ -68,9 +88,11 @@ if uploaded_file is not None:
 
             df['Cảnh báo nguy cơ'] = df['Điểm tối thiểu/môn'].apply(assess_risk)
 
-            display_cols = ['STT', 'Họ và tên', 'Điểm lớp 10', 'Điểm lớp 11', 'Điểm lớp 12', 
-                            'Điểm TB 3 năm', 'Điểm tối thiểu/môn', 'Cảnh báo nguy cơ']
+            # --- Thêm các cột kết quả vào danh sách hiển thị ---
+            display_cols.extend(['Điểm tối thiểu/môn', 'Cảnh báo nguy cơ'])
+            format_dict['Điểm tối thiểu/môn'] = '{:.2f}'
 
+            # --- TẢI XUỐNG VÀ HIỂN THỊ ---
             st.subheader("Tải kết quả")
             
             output = io.BytesIO()
@@ -88,14 +110,6 @@ if uploaded_file is not None:
 
             st.subheader("Bảng tính Điểm Từng Môn Tối Thiểu")
             
-            format_dict = {
-                'Điểm lớp 10': '{:.2f}',
-                'Điểm lớp 11': '{:.2f}',
-                'Điểm lớp 12': '{:.2f}',
-                'Điểm TB 3 năm': '{:.2f}',
-                'Điểm tối thiểu/môn': '{:.2f}'
-            }
-
             st.dataframe(
                 df[display_cols].style
                 .format(format_dict)
@@ -109,10 +123,10 @@ if uploaded_file is not None:
             
             st.info("""
             💡 **Lưu ý:**
+            - Hệ thống tự động quét tìm cột chứa chữ **'Ưu tiên'** hoặc **'Khuyến khích'** trong file. Nếu không có, hệ thống ngầm định lấy điểm là **0**. Nếu có mà bị bỏ trống, ô đó cũng tự động được tính là **0**.
             - **Điểm tối thiểu/môn** hiển thị ở trên là mức điểm mục tiêu *trung bình* bạn cần đạt cho mỗi môn thi. (Ví dụ: Yêu cầu 5.0/môn nghĩa là Toán 4, Văn 6 vẫn được tính là đủ).
             - Thuật toán đã tự động chặn mức thấp nhất là **1.25 điểm**. Dù học bạ của bạn có cao đến đâu, nếu có bất kỳ bài thi nào từ 1.0 điểm trở xuống, bạn vẫn sẽ trượt tốt nghiệp do dính điểm liệt.
             """)
             
     except Exception as e:
-
         st.error(f"Có lỗi xảy ra khi xử lý file: {e}")
